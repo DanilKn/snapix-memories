@@ -1681,68 +1681,70 @@ function WebCameraOverlay({
 
         let publicUrl = "";
 
-        // 1. Try R2 Upload
         try {
-          const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
-          const r2Res = await fetch("/api/r2-upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ eventId: event.id, fileName: filename }),
-          });
-          if (r2Res.ok) {
-            const r2Data = await r2Res.json();
-            const putRes = await fetch(r2Data.uploadUrl, {
-              method: "PUT",
-              headers: { "Content-Type": "image/jpeg" },
-              body: blob,
+          // 1. Try Cloud Function R2 Upload (same backend function used by the mobile app)
+          try {
+            const fnRes = await fetch("https://us-central1-snapix-aa00a.cloudfunctions.net/generatePresignedUrl", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ eventId: event.id, guestId: userUid, fileExtension: "jpg" }),
             });
-            if (putRes.ok) {
-              publicUrl = r2Data.displayUrl;
+            if (fnRes.ok) {
+              const fnData = await fnRes.json();
+              const putRes = await fetch(fnData.presignedUrl, {
+                method: "PUT",
+                headers: { "Content-Type": "image/jpeg" },
+                body: blob,
+              });
+              if (putRes.ok) {
+                publicUrl = fnData.publicUrl;
+              }
+            } else {
+              console.warn("Cloud function returned error:", await fnRes.text());
+            }
+          } catch (e) {
+            console.warn("Cloud function R2 upload error, falling back to Firebase Storage:", e);
+          }
+
+          // 2. Firebase Storage Fallback
+          if (!publicUrl) {
+            try {
+              const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+              const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+              const storageRef = ref(storage, `events/${event.id}/${filename}`);
+              await uploadBytes(storageRef, blob);
+              publicUrl = await getDownloadURL(storageRef);
+            } catch (storageErr) {
+              console.error("Firebase Storage upload error:", storageErr);
+              alert("Failed to upload photo. Please check connection.");
+              return;
             }
           }
-        } catch (e) {
-          console.warn("R2 upload error, falling back to Firebase Storage:", e);
-        }
 
-        // 2. Firebase Storage Fallback
-        if (!publicUrl) {
-          try {
-            const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
-            const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
-            const storageRef = ref(storage, `events/${event.id}/${filename}`);
-            await uploadBytes(storageRef, blob);
-            publicUrl = await getDownloadURL(storageRef);
-          } catch (storageErr) {
-            console.error("Firebase Storage upload error:", storageErr);
-            alert("Failed to upload photo. Please check connection.");
-            setCapturing(false);
-            return;
+          // 3. Write document to Firestore photos collection
+          if (publicUrl) {
+            const { collection, addDoc } = await import("firebase/firestore");
+            const newPhotoDoc = await addDoc(collection(db, "photos"), {
+              eventId: event.id,
+              imageUrl: publicUrl,
+              publicUrl: publicUrl,
+              uploaderId: userUid,
+              uploaderName: userName,
+              createdAt: serverTimestamp(),
+            });
+
+            onPhotoUploaded({
+              id: newPhotoDoc.id,
+              publicUrl: publicUrl,
+              uploaderName: userName,
+              createdAt: Timestamp.now(),
+            });
           }
+        } catch (err) {
+          console.error("Upload process error:", err);
+        } finally {
+          setCapturing(false);
         }
-
-        // 3. Write document to Firestore photos collection
-        try {
-          const { collection, addDoc } = await import("firebase/firestore");
-          const newPhotoDoc = await addDoc(collection(db, "photos"), {
-            eventId: event.id,
-            imageUrl: publicUrl,
-            publicUrl: publicUrl,
-            uploaderId: userUid,
-            uploaderName: userName,
-            createdAt: serverTimestamp(),
-          });
-
-          onPhotoUploaded({
-            id: newPhotoDoc.id,
-            publicUrl: publicUrl,
-            uploaderName: userName,
-            createdAt: Timestamp.now(),
-          });
-        } catch (dbErr) {
-          console.error("Error creating photo document:", dbErr);
-        }
-
-        setCapturing(false);
       }, "image/jpeg", 0.85);
 
     } catch (err) {
@@ -1827,7 +1829,13 @@ function WebCameraOverlay({
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+                className={facingMode === "user" ? "scale-x-[-1]" : ""}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "center",
+                }}
               />
             </LensFilter>
           </div>
