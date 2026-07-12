@@ -321,10 +321,11 @@ function JoinByCode() {
         { merge: true }
       );
 
-      // 3. Add to participants
+      // 3. Add to participants and save display name in participantNames map
       const eventRef = doc(db, "events", event.id);
       await updateDoc(eventRef, {
         participants: arrayUnion(currentUserId),
+        [`participantNames.${currentUserId}`]: name.trim(),
       });
 
       // 4. Move to step 3 (Gallery)
@@ -1493,6 +1494,7 @@ function WebCameraOverlay({
 
   const touchStartDistRef = useRef<number | null>(null);
   const baseZoomRef = useRef<number>(1.0);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const isUltraWide = (label: string) => {
     const l = label.toLowerCase();
@@ -1549,6 +1551,17 @@ function WebCameraOverlay({
       try {
         setCameraError(null);
 
+        // Stop any current tracks before initiating a new getUserMedia to release hardware lock
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          setStream(null);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
         const videoConstraints: MediaTrackConstraints = {};
         if (facingMode === "user") {
           videoConstraints.facingMode = "user";
@@ -1571,6 +1584,7 @@ function WebCameraOverlay({
         };
         const active = await navigator.mediaDevices.getUserMedia(constraints);
         activeStream = active;
+        streamRef.current = active;
         setStream(active);
         if (videoRef.current) {
           videoRef.current.srcObject = active;
@@ -1619,6 +1633,7 @@ function WebCameraOverlay({
           const fallbackConstraints = { video: true, audio: false };
           const activeFallback = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
           activeStream = activeFallback;
+          streamRef.current = activeFallback;
           setStream(activeFallback);
           if (videoRef.current) {
             videoRef.current.srcObject = activeFallback;
@@ -1635,8 +1650,28 @@ function WebCameraOverlay({
       if (activeStream) {
         activeStream.getTracks().forEach((track) => track.stop());
       }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, [facingMode, zoomLevel < 1.0, ultraWideDeviceId, normalBackDeviceId]);
+
+  // Handle flash/torch mode changes
+  useEffect(() => {
+    const activeStream = stream || streamRef.current;
+    if (!activeStream) return;
+    const track = activeStream.getVideoTracks()[0];
+    if (track) {
+      const capabilities = typeof track.getCapabilities === "function" ? track.getCapabilities() : {};
+      if ('torch' in capabilities) {
+        track.applyConstraints({
+          advanced: [{ torch: flashMode === "on" }]
+        } as any).catch(err => {
+          console.warn("Failed to apply torch constraint:", err);
+        });
+      }
+    }
+  }, [flashMode, stream]);
 
   // Handle capture
   const handleShutter = async () => {
