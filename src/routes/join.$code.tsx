@@ -105,9 +105,15 @@ function JoinByCode() {
 
   // ── 1. Load event data ───────────────────────────────────
   useEffect(() => {
+    if (authLoading) return;
     let cancelled = false;
     const loadEvent = async () => {
       try {
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+        if (cancelled) return;
+
         let eventDocId: string | null = null;
 
         // Try by invite code first
@@ -249,7 +255,7 @@ function JoinByCode() {
     return () => {
       cancelled = true;
     };
-  }, [code, isRu]);
+  }, [code, isRu, authLoading]);
 
   // ── 2. Determine flow step based on auth + participation ──
   useEffect(() => {

@@ -3,7 +3,10 @@ import { Frame } from "@/components/snapix/Frame";
 import { BackLink } from "@/components/snapix/ui";
 import { useState, useEffect } from "react";
 import { collection, query, where, getDocs, doc, onSnapshot, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { signInAnonymously } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+
 
 export const Route = createFileRoute("/gallery")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -34,6 +37,7 @@ interface PhotoData {
 
 function Gallery() {
   const { id, code } = Route.useSearch();
+  const { user, loading: authLoading } = useAuth();
   const [event, setEvent] = useState<EventData | null>(null);
   const [photos, setPhotos] = useState<PhotoData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,11 +46,16 @@ function Gallery() {
 
   // Subscribe to Event and Photos
   useEffect(() => {
+    if (authLoading) return;
     let unsubscribePhotos: () => void = () => {};
     let unsubscribeEvent: () => void = () => {};
 
     const loadData = async () => {
       try {
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+
         let eventDocId = id;
 
         // If we only have the invite code, look up the event ID first
@@ -126,7 +135,7 @@ function Gallery() {
       unsubscribeEvent();
       unsubscribePhotos();
     };
-  }, [id, code]);
+  }, [id, code, authLoading]);
 
   // Countdown timer effect
   useEffect(() => {
