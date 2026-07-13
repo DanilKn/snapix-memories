@@ -342,6 +342,16 @@ function JoinByCode() {
     try {
       const response = await fetch(url);
       const blob = await response.blob();
+
+      // Try to use Web Share API on mobile to allow direct saving to system gallery/camera roll
+      const file = new File([blob], filename, { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+        });
+        return;
+      }
+
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = filename;
@@ -1185,7 +1195,7 @@ function GlassSquareButton({
 function LensFilter({ children, lens }: { children: React.ReactNode; lens: string }) {
   if (lens === "Black & White" || lens === "Black and White") {
     return (
-      <div className="relative w-full h-full overflow-hidden select-none">
+      <div className="relative w-full h-full overflow-hidden">
         {/* Grayscale filter matching Flutter color matrix */}
         <div className="w-full h-full" style={{ filter: "url(#black-and-white-filter)" }}>
           {children}
@@ -1211,7 +1221,7 @@ function LensFilter({ children, lens }: { children: React.ReactNode; lens: strin
 
   if (lens === "Vintage") {
     return (
-      <div className="relative w-full h-full overflow-hidden select-none">
+      <div className="relative w-full h-full overflow-hidden">
         {/* Vintage filter matching Flutter color matrix */}
         <div className="w-full h-full" style={{ filter: "url(#vintage-filter)" }}>
           {children}
@@ -1687,17 +1697,30 @@ function WebCameraOverlay({
       const canvas = document.createElement("canvas");
       const videoWidth = video.videoWidth || 1080;
       const videoHeight = video.videoHeight || 1440;
-      canvas.width = videoWidth;
-      canvas.height = videoHeight;
+      
+      // Calculate target 9:16 aspect ratio dimensions
+      let targetHeight = videoHeight;
+      let targetWidth = Math.round((targetHeight * 9) / 16);
+
+      if (targetWidth > videoWidth) {
+        targetWidth = videoWidth;
+        targetHeight = Math.round((targetWidth * 16) / 9);
+      }
+
+      const cropX = (videoWidth - targetWidth) / 2;
+      const cropY = (videoHeight - targetHeight) / 2;
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not get 2D canvas context");
 
       const scale = getCssScale();
-      const sWidth = videoWidth / scale;
-      const sHeight = videoHeight / scale;
-      const sx = (videoWidth - sWidth) / 2;
-      const sy = (videoHeight - sHeight) / 2;
+      const sWidth = targetWidth / scale;
+      const sHeight = targetHeight / scale;
+      const sx = cropX + (targetWidth - sWidth) / 2;
+      const sy = cropY + (targetHeight - sHeight) / 2;
 
       // Draw mirrored if using front camera
       if (facingMode === "user") {
@@ -1793,9 +1816,9 @@ function WebCameraOverlay({
   };
 
   return (
-    <div className="absolute inset-0 z-50 bg-[#040405] flex flex-col justify-between select-none">
+    <div className="fixed inset-0 z-50 bg-[#040405] flex flex-col justify-between select-none h-[100dvh] w-screen overflow-hidden">
       {/* Top Controls */}
-      <div className="relative z-10 px-5 pt-8 flex items-center justify-between text-white bg-gradient-to-b from-black/80 to-transparent pb-4">
+      <div className="relative z-10 px-5 pt-8 flex items-center justify-between text-white bg-gradient-to-b from-black/80 to-transparent pb-4 shrink-0">
         {/* Back button */}
         <button
           onClick={onClose}
@@ -1880,85 +1903,88 @@ function WebCameraOverlay({
         {showFlashOverlay && (
           <div className="absolute inset-0 bg-white z-20 animate-out fade-out duration-150" />
         )}
-      </div>
 
-      {/* Middle Overlaid Controls */}
-      <div className="absolute bottom-36 inset-x-0 px-10 flex items-center justify-between z-10 pointer-events-auto">
-        {/* Flash Toggle */}
-        <button
-          onClick={() => setFlashMode((f) => (f === "off" ? "on" : "off"))}
-          className="text-white active:scale-95 transition p-2"
-        >
-          {flashMode === "on" ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              <line x1="1" y1="1" x2="23" y2="23" />
-            </svg>
-          )}
-        </button>
+        {/* Middle Overlaid Controls - Placed inside flex-1 view to stay anchored to the bottom panel edge */}
+        <div className="absolute bottom-6 inset-x-0 px-10 flex items-center justify-between z-10 pointer-events-auto">
+          {/* Flash Toggle */}
+          <button
+            onClick={() => setFlashMode((f) => (f === "off" ? "on" : "off"))}
+            className="text-white active:scale-95 transition p-2"
+          >
+            {flashMode === "on" ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            )}
+          </button>
 
-        {/* Zoom Selector (Wide/Regular for Front Camera, 0.5/1.0x for Back Camera) */}
-        <div className="flex items-center bg-[#0C0C0E]/60 border border-white/5 rounded-full p-0.5 backdrop-blur-md">
-          {facingMode === "user" ? (
-            <>
-              <button
-                onClick={() => setZoomLevel(1.0)}
-                className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
-                  zoomLevel < 1.15 ? "bg-white/20 text-white font-bold" : "text-white/40"
-                }`}
-              >
-                Wide
-              </button>
-              <button
-                onClick={() => setZoomLevel(1.3)}
-                className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
-                  zoomLevel >= 1.15 ? "bg-white/20 text-white font-bold" : "text-white/40"
-                }`}
-              >
-                Regular
-              </button>
-            </>
-          ) : (
-            <>
-              {hasUltraWide && (
+          {/* Zoom Selector (Wide/Regular for Front Camera, 0.5/1.0x for Back Camera) */}
+          <div className="flex items-center bg-[#0C0C0E]/60 border border-white/5 rounded-full p-0.5 backdrop-blur-md">
+            {facingMode === "user" ? (
+              <>
                 <button
-                  onClick={() => setZoomLevel(0.5)}
+                  onClick={() => setZoomLevel(1.0)}
                   className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
-                    zoomLevel < 1.0 ? "bg-white/20 text-white font-bold" : "text-white/40"
+                    zoomLevel < 1.15 ? "bg-white/20 text-white font-bold" : "text-white/40"
                   }`}
                 >
-                  {zoomLevel < 1.0 ? `${zoomLevel.toFixed(1)}` : "0.5"}
+                  Wide
                 </button>
-              )}
-              <button
-                onClick={() => setZoomLevel(1.0)}
-                className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
-                  zoomLevel >= 1.0 ? "bg-white/20 text-white font-bold" : "text-white/40"
-                }`}
-              >
-                {zoomLevel >= 1.0 ? `${zoomLevel.toFixed(1)}x` : "1.0x"}
-              </button>
-            </>
-          )}
-        </div>
+                <button
+                  onClick={() => setZoomLevel(1.3)}
+                  className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
+                    zoomLevel >= 1.15 ? "bg-white/20 text-white font-bold" : "text-white/40"
+                  }`}
+                >
+                  Regular
+                </button>
+              </>
+            ) : (
+              <>
+                {hasUltraWide && (
+                  <button
+                    onClick={() => setZoomLevel(0.5)}
+                    className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
+                      zoomLevel < 1.0 ? "bg-white/20 text-white font-bold" : "text-white/40"
+                    }`}
+                  >
+                    {zoomLevel < 1.0 ? `${zoomLevel.toFixed(1)}` : "0.5"}
+                  </button>
+                )}
+                <button
+                  onClick={() => setZoomLevel(1.0)}
+                  className={`px-3 py-1 rounded-full text-[12px] font-semibold transition ${
+                    zoomLevel >= 1.0 ? "bg-white/20 text-white font-bold" : "text-white/40"
+                  }`}
+                >
+                  {zoomLevel >= 1.0 ? `${zoomLevel.toFixed(1)}x` : "1.0x"}
+                </button>
+              </>
+            )}
+          </div>
 
-        {/* Flip Camera */}
-        <button
-          onClick={toggleCamera}
-          className="text-white active:scale-95 transition p-2"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 20a10 10 0 0 0-16-8m16 8v-5M4 4a10 10 0 0 0 16 8M4 4v5" />
-          </svg>
-        </button>
+          {/* Flip Camera - Clean camera switch icon */}
+          <button
+            onClick={toggleCamera}
+            className="text-white active:scale-95 transition p-2"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5l2-3h6l2 3h1a2 2 0 0 1 2 2v3.5" />
+              <path d="M16 12.5a3 3 0 1 0-4 2.8" />
+              <path d="M22 19a3 3 0 1 1-5.14-2.1L18 18" />
+              <path d="M16 14h4v4" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Bottom Shutter Panel Capsule */}
-      <div className="pb-8 pt-4 bg-black/90 flex items-center justify-center z-10">
+      {/* Bottom Shutter Panel Capsule - Responsive padding with safe area bottom inset */}
+      <div className="pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 bg-black/90 flex items-center justify-center z-10 w-full shrink-0">
         <div className="w-[90%] h-28 bg-[#151517] rounded-[32px] border border-white/5 flex items-center justify-between px-6 shadow-2xl">
           {/* Film Wheel Counter (Left) */}
           <div className="relative h-[52px] w-[76px] bg-[#0C0C0E] rounded-xl flex items-center justify-between px-2.5 border border-white/5 overflow-hidden">
