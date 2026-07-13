@@ -1698,13 +1698,13 @@ function WebCameraOverlay({
       const videoWidth = video.videoWidth || 1080;
       const videoHeight = video.videoHeight || 1440;
       
-      // Calculate target 9:16 aspect ratio dimensions
+      // Calculate target 3:4 aspect ratio dimensions
       let targetHeight = videoHeight;
-      let targetWidth = Math.round((targetHeight * 9) / 16);
+      let targetWidth = Math.round((targetHeight * 3) / 4);
 
       if (targetWidth > videoWidth) {
         targetWidth = videoWidth;
-        targetHeight = Math.round((targetWidth * 16) / 9);
+        targetHeight = Math.round((targetWidth * 4) / 3);
       }
 
       const cropX = (videoWidth - targetWidth) / 2;
