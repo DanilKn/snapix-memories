@@ -24,6 +24,9 @@ import { Frame, ApertureLogo, BrandMark } from "@/components/snapix/Frame";
 import sunset from "@/assets/film-sunset.jpg";
 import { QRCodeSVG } from "qrcode.react";
 
+const APP_STORE_URL =
+  "https://apps.apple.com/kz/app/snapix-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D0%B0-%D0%BC%D0%BE%D0%BC%D0%B5%D0%BD%D1%82%D0%B0/id6788061353";
+
 const resolveImageUrl = (path?: string) => {
   if (!path) return sunset;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
@@ -51,6 +54,7 @@ interface EventData {
   revealMode: string;
   lens: string;
   participants: string[];
+  participantNames?: Record<string, string>;
   maxParticipants: number;
   shotsLimit: number;
   status: string;
@@ -61,6 +65,7 @@ interface PhotoData {
   id: string;
   publicUrl: string;
   uploaderName: string;
+  uploaderId?: string;
   createdAt: Timestamp | null;
 }
 
@@ -181,6 +186,7 @@ function JoinByCode() {
             revealMode: d.revealMode || "after",
             lens: d.lens || "Original 35mm",
             participants: d.participants || [],
+            participantNames: d.participantNames || {},
             maxParticipants: d.maxParticipants || 10,
             shotsLimit: d.shotsLimit || 24,
             status: d.status || "active",
@@ -226,6 +232,7 @@ function JoinByCode() {
               id: pDoc.id,
               publicUrl: pData.publicUrl,
               uploaderName: pData.uploaderName || tr("Гость", "Guest"),
+              uploaderId: pData.uploaderId || "",
               createdAt: pData.createdAt || null,
             });
           });
@@ -266,6 +273,16 @@ function JoinByCode() {
       setStep("invite");
     }
   }, [user, authLoading, event, loading]);
+
+  // ── 2.5. Restore name state from event's participantNames or user profile ──
+  useEffect(() => {
+    if (user && event && !name) {
+      const storedName = event.participantNames?.[user.uid] || user.displayName || "";
+      if (storedName) {
+        setName(storedName);
+      }
+    }
+  }, [user, event, name]);
 
   // ── 3. Countdown timer ──────────────────────────────────
   useEffect(() => {
@@ -493,7 +510,13 @@ function JoinByCode() {
             {/* Open in App (Pill white) */}
             <button
               onClick={() => {
+                const start = Date.now();
                 window.location.href = `snapix://join/${code}`;
+                setTimeout(() => {
+                  if (Date.now() - start < 2000 && !document.hidden) {
+                    window.location.href = APP_STORE_URL;
+                  }
+                }, 1500);
               }}
               className="w-full h-14 bg-white text-black font-semibold rounded-full flex items-center justify-center gap-2 active:scale-[0.98] transition text-[15px]"
             >
@@ -536,7 +559,7 @@ function JoinByCode() {
 
             {/* Don't have the app? Download here. */}
             <a
-              href="https://apps.apple.com/app/snapix"
+              href={APP_STORE_URL}
               target="_blank"
               rel="noreferrer"
               className="text-center text-[13px] text-white/50 underline underline-offset-2 mt-6 block"
@@ -673,7 +696,7 @@ function JoinByCode() {
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
                 <>
-                  {tr("Взять камеру", "Take your camera")}
+                  {tr("Присоединиться", "Join")}
                   <svg
                     width="16"
                     height="16"
@@ -831,7 +854,7 @@ function JoinByCode() {
               {/* Camera button */}
               <button
                 onClick={() => {
-                  const myPhotos = photos.filter((p) => p.uploaderName === name);
+                  const myPhotos = photos.filter((p) => p.uploaderId === user?.uid);
                   const shotsLeft = Math.max(0, event.shotsLimit - myPhotos.length);
                   if (shotsLeft <= 0) {
                     setInfoModal({
@@ -1053,7 +1076,7 @@ function JoinByCode() {
           userName={name}
           userUid={user?.uid || "anonymous"}
           onClose={() => setCameraOpen(false)}
-          shotsLeft={Math.max(0, event.shotsLimit - photos.filter((p) => p.uploaderName === name).length)}
+          shotsLeft={Math.max(0, event.shotsLimit - photos.filter((p) => p.uploaderId === user?.uid).length)}
           lastPhotoUrl={photos.length > 0 ? photos[0].publicUrl : null}
           tr={tr}
           isRu={isRu}
@@ -1062,6 +1085,7 @@ function JoinByCode() {
             setPhotos((prev) => [newPhoto, ...prev]);
           }}
           onOpenQr={() => setQrOpen(true)}
+          isDeveloped={isDeveloped}
         />
       )}
 
@@ -1083,6 +1107,7 @@ function JoinByCode() {
           tr={tr}
           isRu={isRu}
           downloadPhoto={downloadPhoto}
+          isDeveloped={isDeveloped}
         />
       )}
 
@@ -1475,6 +1500,7 @@ function WebCameraOverlay({
   timeLeft,
   onPhotoUploaded,
   onOpenQr,
+  isDeveloped,
 }: {
   event: EventData;
   userName: string;
@@ -1487,6 +1513,7 @@ function WebCameraOverlay({
   timeLeft: string;
   onPhotoUploaded: (newPhoto: PhotoData) => void;
   onOpenQr: () => void;
+  isDeveloped: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
@@ -1522,6 +1549,8 @@ function WebCameraOverlay({
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (facingMode === "user") return;
+    if (zoomLevel < 1.0) return;
     if (e.touches.length === 2) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -1533,13 +1562,15 @@ function WebCameraOverlay({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (facingMode === "user") return;
+    if (zoomLevel < 1.0) return;
     if (e.touches.length === 2 && touchStartDistRef.current !== null) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       const ratio = dist / touchStartDistRef.current;
-      const minZoom = hasUltraWide && facingMode !== "user" ? 0.5 : 1.0;
+      const minZoom = 1.0;
       const maxZoom = 5.0;
       const newZoom = Math.min(maxZoom, Math.max(minZoom, baseZoomRef.current * ratio));
       setZoomLevel(Math.round(newZoom * 10) / 10);
@@ -2013,16 +2044,31 @@ function WebCameraOverlay({
           </button>
 
           {/* Polaroid Deck Gallery Stack (Right) */}
-          <div className="relative w-[76px] h-[52px] flex items-center justify-center overflow-visible">
+          <button
+            onClick={onClose}
+            className="relative w-[76px] h-[52px] flex items-center justify-center overflow-visible active:scale-95 transition focus:outline-none"
+          >
             {lastPhotoUrl ? (
-              <>
-                <div className="absolute w-[38px] h-[50px] rounded-md overflow-hidden border border-white/20 shadow-md rotate-[8deg] translate-x-1 opacity-60">
-                  <img src={resolveImageUrl(lastPhotoUrl)} alt="" className="w-full h-full object-cover" />
-                </div>
-                <div className="absolute w-[38px] h-[50px] rounded-md overflow-hidden border border-white/20 shadow-lg -rotate-[4deg] bg-[#1C1C1E] flex items-center justify-center">
-                  <img src={resolveImageUrl(lastPhotoUrl)} alt="" className="w-full h-full object-cover" />
-                </div>
-              </>
+              <div className="absolute w-[38px] h-[50px] rounded-md overflow-hidden border border-white/20 shadow-lg bg-[#1C1C1E] flex items-center justify-center relative">
+                <img
+                  src={resolveImageUrl(lastPhotoUrl)}
+                  alt=""
+                  className={`w-full h-full object-cover transition-all ${
+                    !isDeveloped ? "blur-[20px] scale-125" : ""
+                  }`}
+                  style={{
+                    filter: !isDeveloped ? "blur(20px)" : "none",
+                  }}
+                />
+                {!isDeveloped && (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/80">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="absolute w-[38px] h-[50px] rounded-md overflow-hidden border border-white/20 shadow-lg bg-[#1C1C1E] flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-white/35">
@@ -2032,7 +2078,7 @@ function WebCameraOverlay({
                 </svg>
               </div>
             )}
-          </div>
+          </button>
         </div>
       </div>
     </div>
@@ -2163,6 +2209,7 @@ function SelectFramesBottomSheet({
   tr,
   isRu,
   downloadPhoto,
+  isDeveloped,
 }: {
   event: EventData;
   photos: PhotoData[];
@@ -2170,6 +2217,7 @@ function SelectFramesBottomSheet({
   tr: (ru: string, en: string) => string;
   isRu: boolean;
   downloadPhoto: (url: string, filename: string) => Promise<void>;
+  isDeveloped: boolean;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>(
     photos.map((p) => p.id)
@@ -2305,14 +2353,27 @@ function SelectFramesBottomSheet({
                 className="relative aspect-[3/4] rounded-2xl overflow-hidden group select-none border border-white/5 cursor-pointer"
               >
                 {/* Photo with lens filter */}
-                <div className="w-full h-full">
+                <div className="w-full h-full relative">
                   <LensFilter lens={event.lens}>
                     <img
                       src={resolveImageUrl(photo.publicUrl)}
                       alt=""
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full object-cover ${
+                        !isDeveloped ? "blur-[20px] scale-125" : ""
+                      }`}
+                      style={{
+                        filter: !isDeveloped ? "blur(20px)" : "none",
+                      }}
                     />
                   </LensFilter>
+                  {!isDeveloped && (
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/80">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
 
                 {/* Top-Right Checkbox */}

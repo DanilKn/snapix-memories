@@ -12,12 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SecretAdminAnalytics2026RouteImport } from './routes/secret-admin-analytics-2026'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as FilmRouteImport } from './routes/film'
 import { Route as CreateRouteImport } from './routes/create'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinIndexRouteImport } from './routes/join.index'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
@@ -38,6 +40,12 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecretAdminAnalytics2026Route =
+  SecretAdminAnalytics2026RouteImport.update({
+    id: '/secret-admin-analytics-2026',
+    path: '/secret-admin-analytics-2026',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const JoinRoute = JoinRouteImport.update({
   id: '/join',
   path: '/join',
@@ -68,6 +76,11 @@ const CreateRoute = CreateRouteImport.update({
   path: '/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -91,12 +104,14 @@ const ApiR2UploadRoute = ApiR2UploadRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/film': typeof FilmRoute
   '/gallery': typeof GalleryRoute
   '/home': typeof HomeRoute
   '/invite': typeof InviteRoute
   '/join': typeof JoinRouteWithChildren
+  '/secret-admin-analytics-2026': typeof SecretAdminAnalytics2026Route
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
@@ -106,11 +121,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/film': typeof FilmRoute
   '/gallery': typeof GalleryRoute
   '/home': typeof HomeRoute
   '/invite': typeof InviteRoute
+  '/secret-admin-analytics-2026': typeof SecretAdminAnalytics2026Route
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
@@ -121,12 +138,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/film': typeof FilmRoute
   '/gallery': typeof GalleryRoute
   '/home': typeof HomeRoute
   '/invite': typeof InviteRoute
   '/join': typeof JoinRouteWithChildren
+  '/secret-admin-analytics-2026': typeof SecretAdminAnalytics2026Route
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
@@ -138,12 +157,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/create'
     | '/film'
     | '/gallery'
     | '/home'
     | '/invite'
     | '/join'
+    | '/secret-admin-analytics-2026'
     | '/settings'
     | '/setup'
     | '/signin'
@@ -153,11 +174,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/create'
     | '/film'
     | '/gallery'
     | '/home'
     | '/invite'
+    | '/secret-admin-analytics-2026'
     | '/settings'
     | '/setup'
     | '/signin'
@@ -167,12 +190,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/create'
     | '/film'
     | '/gallery'
     | '/home'
     | '/invite'
     | '/join'
+    | '/secret-admin-analytics-2026'
     | '/settings'
     | '/setup'
     | '/signin'
@@ -183,12 +208,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   CreateRoute: typeof CreateRoute
   FilmRoute: typeof FilmRoute
   GalleryRoute: typeof GalleryRoute
   HomeRoute: typeof HomeRoute
   InviteRoute: typeof InviteRoute
   JoinRoute: typeof JoinRouteWithChildren
+  SecretAdminAnalytics2026Route: typeof SecretAdminAnalytics2026Route
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
   SigninRoute: typeof SigninRoute
@@ -216,6 +243,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/secret-admin-analytics-2026': {
+      id: '/secret-admin-analytics-2026'
+      path: '/secret-admin-analytics-2026'
+      fullPath: '/secret-admin-analytics-2026'
+      preLoaderRoute: typeof SecretAdminAnalytics2026RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join': {
@@ -258,6 +292,13 @@ declare module '@tanstack/react-router' {
       path: '/create'
       fullPath: '/create'
       preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -305,12 +346,14 @@ const JoinRouteWithChildren = JoinRoute._addFileChildren(JoinRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   CreateRoute: CreateRoute,
   FilmRoute: FilmRoute,
   GalleryRoute: GalleryRoute,
   HomeRoute: HomeRoute,
   InviteRoute: InviteRoute,
   JoinRoute: JoinRouteWithChildren,
+  SecretAdminAnalytics2026Route: SecretAdminAnalytics2026Route,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
   SigninRoute: SigninRoute,

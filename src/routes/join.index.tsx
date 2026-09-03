@@ -75,7 +75,9 @@ function JoinFallback() {
           <p className="text-center text-[12px] text-white/30 pt-2">
             Don't have a code?{" "}
             <a
-              href="https://apps.apple.com/app/snapix"
+              href="https://apps.apple.com/kz/app/snapix-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D0%B0-%D0%BC%D0%BE%D0%BC%D0%B5%D0%BD%D1%82%D0%B0/id6788061353"
+              target="_blank"
+              rel="noreferrer"
               className="underline text-white/50"
             >
               Download Snapix
